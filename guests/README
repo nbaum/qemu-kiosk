@@ -1,0 +1,8 @@
+
+Each subdirectory here is a guest.
+
+Certain files in those subdirectories have special meaning:
+
+  $guest/root       The "root" device. QEMU: -hda $guest/root
+  $guest/cdrom.iso  Automatically attached as a CDROM. QEMU: -cdrmo $guest/cdrom.iso
+  $guest/warning    Displayed by zenity before the VM is started.

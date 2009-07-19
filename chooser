@@ -1,0 +1,50 @@
+#set -m
+
+2>/dev/null
+
+export GTK_MODULES=
+
+session() {
+  until grep $VNC /tmp/.X*-lock >/dev/null; do sleep 0.1; done
+  export DISPLAY=$(grep -l $VNC /tmp/.X*-lock | sed -r 's|/tmp/.X([0-9]+)-lock|:\1|')
+  xsetbg image
+  sleep 1
+  matchbox-window-manager &
+  OB=$!
+  zenity --warning --title "Dial-a-Box" --text "$(cat notice)"
+  while test "$VM" = ""; do
+    VM=$(zenity --list --title "Dial-a-Box" --column "VM Image" --text "Choose a VM image to boot with:" $(cd guests; echo *))
+    if test "$?" = "1"; then
+      exit
+    fi
+  done
+  if [ -e guests/$VM/warning ]; then
+    zenity --warning --title "Dial-a-Box" --text "$(cat guests/$VM/warning)"
+  fi
+  kill $OB
+  ARGS=""
+  if [ -e guests/$VM/cdrom.iso ]; then
+    ARGS="$ARGS -cdrom guests/$VM/cdrom.iso"
+  fi
+  ARGS="$ARGS -snapshot"
+  ARGS="$ARGS -full-screen -vga std -usb -usbdevice tablet"
+  ARGS="$ARGS -hda guests/$VM/root -m 384"
+  ARGS="$ARGS -monitor null -serial null -parallel null"
+  if [ -e guests/$VM/qemu_args ]; then
+    ARGS="$ARGS $(cat guests/$VM/qemu_args)"
+  fi
+  qemu-system-x86_64 $ARGS
+}
+
+vnc() {
+  Xvnc -inetd -SecurityTypes=None -once -pixelformat BGR888 -desktop Dial-a-Box &
+}
+
+#session &
+#vnc
+
+set -m
+vnc
+export VNC=$!
+set +m
+session 1>&2 </dev/null # 2>/dev/null
