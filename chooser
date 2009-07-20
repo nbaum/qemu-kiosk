@@ -1,5 +1,3 @@
-#set -m
-
 2>/dev/null
 
 export GTK_MODULES=
@@ -13,7 +11,19 @@ session() {
   OB=$!
   zenity --warning --title "Dial-a-Box" --text "$(cat notice)"
   while test "$VM" = ""; do
-    VM=$(zenity --list --title "Dial-a-Box" --column "VM Image" --text "Choose a VM image to boot with:" $(cd guests; echo *))
+    VM=$(export IFS="
+"
+         zenity --list --title "Dial-a-Box" --column "VM Image" --column "Notes" --text "Choose a VM image to boot with:" \
+                --width 400 --height 250 \
+                $(cd guests
+                  for X in $(ls | grep -v README); do
+                    echo $X
+                    if [ -e $X/title ]; then
+                      head -n1 $X/title
+                    else
+                      echo " "
+                    fi
+                  done))
     if test "$?" = "1"; then
       exit
     fi
@@ -26,14 +36,20 @@ session() {
   if [ -e guests/$VM/cdrom.iso ]; then
     ARGS="$ARGS -cdrom guests/$VM/cdrom.iso"
   fi
-  ARGS="$ARGS -snapshot"
   ARGS="$ARGS -full-screen -vga std -usb -usbdevice tablet"
   ARGS="$ARGS -hda guests/$VM/root -m 384"
-  ARGS="$ARGS -monitor null -serial null -parallel null"
+  ARGS="$ARGS -serial null -parallel null"
+  ARGS="$ARGS -snapshot"
+  ARGS="$ARGS -monitor null"
   if [ -e guests/$VM/qemu_args ]; then
     ARGS="$ARGS $(cat guests/$VM/qemu_args)"
   fi
-  qemu-system-x86_64 $ARGS
+  if [ -e guests/$VM/state ]; then
+    ARGS="$ARGS -incoming exec:cat"
+    cat guests/$VM/state | qemu-system-x86_64 $ARGS
+  else
+    qemu-system-x86_64 $ARGS
+  fi
 }
 
 vnc() {
