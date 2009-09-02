@@ -1,0 +1,150 @@
+#! /usr/bin/ruby
+
+require 'fileutils'
+BASE = Dir.pwd
+
+module Process
+  def self.spawn (*args)
+    fork { exec(*args) }
+  end
+end
+
+def start_vnc
+  pid = Process.spawn("Xvnc", "-inetd", "-SecurityTypes=None", "-once",
+                      "-geometry", ARGV[0], "-pixelformat", "BGR888",
+                      "-desktop", "Kiosk 1.1 (#{$$})")
+  while (lock_file = `grep -l #{pid} /tmp/.X*-lock`) == ""; sleep 0.1; end
+  ENV["DISPLAY"] = ":#{lock_file[/\d+/]}"
+  $stderr.reopen("/dev/null")
+  $stdout.reopen("/dev/null")
+  pid
+end
+
+def stop_wm
+  if $window_manager
+    Process.kill "INT", $window_manager
+  end
+end
+
+def start_wm
+  stop_wm
+  $window_manager = Process.spawn("openbox")
+  # $window_manager = Process.spawn("matchbox-window-manager")
+  # $window_manager = Process.spawn("metacity")
+end
+
+unless ENV["DISPLAY"]
+  pid = start_vnc
+  system("xsetbg", "image")
+end
+
+start_wm
+require 'gtk2'
+require 'yaml'
+
+def do_vm (path, opts = {})
+  stop_wm
+  vm = YAML.load(File.read(path))
+  Dir.chdir(File.dirname(path)) {
+    args = []
+    if File.exists?("cdrom.iso")
+      args += ["-cdrom", "cdrom.iso"]
+    end
+    unless opts[:show_boot]
+      args += ["-boot", "menu=off"]
+    else
+      args += ["-boot", "menu=on"]
+    end
+    if File.exists?("state")
+      args += ["-incoming", "exec:cat state"]
+    end
+    args += ["-enable-kvm"]
+    args += ["-full-screen"]
+    args += ["-usb"]
+    if opts[:usb_tablet]
+      args += ["-usbdevice", "tablet"]
+    end
+    args += ["-hda", "root"]
+    args += ["-m", "384"]
+    # args += ["-serial", "null"]
+    args += ["-parallel", "null"]
+    args += ["-snapshot"]
+    args += ["-monitor", "unix:#{BASE}/monitors/#{$$},server,nowait"]
+    args += vm['Args'] if vm['Args']
+    begin
+      system("qemu-system-x86_64", *args.flatten)
+    ensure
+      FileUtils.rm_rf("#{BASE}/monitors/#{$$}")
+    end
+  }
+  start_wm
+end
+
+def start_session
+  window = Gtk::Window.new
+  window.border_width = 12
+  window.title  = "Dial-a-Box"
+  ls = Gtk::ListStore.new(String, Gdk::Pixbuf, String)
+  view = Gtk::TreeView.new(ls)
+  view.headers_visible = false
+  view.rules_hint = true
+  menu = File.read("#{BASE}/guests/menu").gsub(/#.*/, '').split(/\s+/)
+  menu.each { |name|
+    path = "#{BASE}/#{name}/guests/vm.yml"
+    vm = YAML.load(File.read(path))
+    next if vm['Disabled']
+    i = ls.append
+    i[0] = "<b>" + vm['Name'] + "</b>\n" + vm['Description']
+    if File.exists?(File.dirname(path) + "/icon.png")
+      i[1] = Gdk::Pixbuf.new(File.dirname(path) + "/icon.png")
+    end
+    i[2] = path
+  }
+  view.append_column(Gtk::TreeViewColumn.new("Name", pb = Gtk::CellRendererPixbuf.new, :pixbuf => 1))
+  view.append_column(Gtk::TreeViewColumn.new("Name", Gtk::CellRendererText.new, :markup => 0))
+  vbox = Gtk::VBox.new(false, 12)
+  frame = Gtk::Frame.new("Virtual Machine")
+  frame.label_widget.set_markup("<b>Virtual Machine</b>")
+  frame.shadow_type = Gtk::SHADOW_NONE
+  align = Gtk::Alignment.new(0, 0, 1, 1)
+  align.set_padding 12, 0, 24, 0
+  align.add view
+  frame.add align
+  vbox.pack_start_defaults(frame)
+  frame = Gtk::Frame.new("Options")
+  frame.shadow_type = Gtk::SHADOW_NONE
+  frame.label_widget.set_markup("<b>Options</b>")
+  align = Gtk::Alignment.new(0, 0, 1, 1)
+  align.set_padding 12, 0, 24, 0
+  vbox2 = Gtk::VBox.new(false, 12)
+  vbox2.pack_start_defaults(show_boot = Gtk::CheckButton.new("Show BIOS boot menu"))
+  vbox2.pack_start_defaults(usb_tablet = Gtk::CheckButton.new("USB tablet device"))
+  usb_tablet.active = true
+  align.add vbox2
+  frame.add(align)
+  vbox.pack_start_defaults(frame)
+  buttons = Gtk::HButtonBox.new
+  exit = Gtk::Button.new(Gtk::Stock::QUIT)
+  launch = Gtk::Button.new(Gtk::Stock::OK)
+  exit.signal_connect("clicked") {
+    stop_wm
+    Kernel.exit
+  }
+  view.selection.mode = Gtk::SELECTION_BROWSE
+  launch.signal_connect("clicked") {
+    do_vm view.selection.selected[2], :show_boot => show_boot.active?, :usb_tablet => usb_tablet.active?
+  }
+  view.signal_connect("row-activated") { |view, path, column|
+    do_vm view.model.get_iter(path)[2], :show_boot => show_boot.active?, :usb_tablet => usb_tablet.active?
+  }
+  buttons.pack_start_defaults(exit)
+  buttons.pack_start_defaults(launch)
+  vbox.pack_start_defaults(buttons)
+  window.add vbox
+  window.show_all
+  Gtk.main
+end
+
+start_session
+
+Process.wait(pid)

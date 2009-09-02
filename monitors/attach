@@ -1,0 +1,1 @@
+socat unix:$1 readline

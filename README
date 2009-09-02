@@ -1,9 +1,0 @@
-Currently required software:
-
- * socat      For connecting port 5901 to the chooser script. You could use (x)inetd.
- * zenity     For displaying messages.
- * vnc4server Tightvncserver doesn't work. Not sure why.
- * QEMU       For the virtual machines!
- * sh         It's what the scripts are written in.
-
-Run ./listener to start up the listener, then use a VNC client to <host>:1.

@@ -1,1 +1,1 @@
-socat tcp4-listen:5901,fork,reuseaddr,bind=93.97.162.231 exec:./chooser,login
+socat tcp4-listen:5900,fork,reuseaddr,bind=93.97.162.231 "exec:./kiosk-shell $1,login"
