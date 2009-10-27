@@ -12,10 +12,10 @@ end
 def start_vnc
   pid = Process.spawn("Xvnc", "-inetd", "-SecurityTypes=None", "-once",
                       "-geometry", ARGV[0], "-pixelformat", "BGR888",
-                      "-desktop", "Kiosk 1.1 (#{$$})")
+                      "-desktop", "Kiosk 1.1 (#{$$})", "-extension", "XFIXES")
   while (lock_file = `grep -l #{pid} /tmp/.X*-lock`) == ""; sleep 0.1; end
   ENV["DISPLAY"] = ":#{lock_file[/\d+/]}"
-  $stderr.reopen("/dev/null")
+  # $stderr.reopen("/dev/null")
   $stdout.reopen("/dev/null")
   pid
 end
@@ -29,8 +29,9 @@ end
 def start_wm
   stop_wm
   $window_manager = Process.spawn("openbox")
-  # $window_manager = Process.spawn("matchbox-window-manager")
-  # $window_manager = Process.spawn("metacity")
+  # $window_manager = Process.spawn("xfce4-session")
+  # Process.spawn("xfce4-panel")
+  # $window_manager = Process.spawn("xfwm4")
 end
 
 unless ENV["DISPLAY"]
@@ -50,6 +51,9 @@ def do_vm (path, opts = {})
     if File.exists?("cdrom.iso")
       args += ["-cdrom", "cdrom.iso"]
     end
+    if File.exists?("floppy.img")
+      args += ["-fda", "floppy.img"]
+    end
     unless opts[:show_boot]
       args += ["-boot", "menu=off"]
     else
@@ -64,7 +68,9 @@ def do_vm (path, opts = {})
     if opts[:usb_tablet]
       args += ["-usbdevice", "tablet"]
     end
-    args += ["-hda", "root"]
+    if File.exists?("root")
+      args += ["-hda", "root"]
+    end
     args += ["-m", "384"]
     # args += ["-serial", "null"]
     args += ["-parallel", "null"]
@@ -90,11 +96,11 @@ def start_session
   view.rules_hint = true
   menu = File.read("#{BASE}/guests/menu").gsub(/#.*/, '').split(/\s+/)
   menu.each { |name|
-    path = "#{BASE}/#{name}/guests/vm.yml"
+    path = "#{BASE}/guests/#{name}/vm.yml"
     vm = YAML.load(File.read(path))
     next if vm['Disabled']
     i = ls.append
-    i[0] = "<b>" + vm['Name'] + "</b>\n" + vm['Description']
+    i[0] = "<b>" + (vm['Name'] || name) + "</b>\n#{vm['Description']}"
     if File.exists?(File.dirname(path) + "/icon.png")
       i[1] = Gdk::Pixbuf.new(File.dirname(path) + "/icon.png")
     end
@@ -117,7 +123,7 @@ def start_session
   align = Gtk::Alignment.new(0, 0, 1, 1)
   align.set_padding 12, 0, 24, 0
   vbox2 = Gtk::VBox.new(false, 12)
-  vbox2.pack_start_defaults(show_boot = Gtk::CheckButton.new("Show BIOS boot menu"))
+  vbox2.pack_start_defaults(show_boot = Gtk::CheckButton.new("Show BIOS boot device menu"))
   vbox2.pack_start_defaults(usb_tablet = Gtk::CheckButton.new("USB tablet device"))
   usb_tablet.active = true
   align.add vbox2

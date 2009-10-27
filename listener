@@ -1,1 +1,5 @@
-socat tcp4-listen:5900,fork,reuseaddr,bind=93.97.162.231 "exec:./kiosk-shell $1,login"
+if [ "$2" == "" ]; then
+  echo "Usage: $0 VNC_PORT RESOLUTION"
+  exit 1
+fi
+socat tcp4-listen:$1,fork,reuseaddr,bind=93.97.162.231 "exec:./kiosk-shell $2,login"
