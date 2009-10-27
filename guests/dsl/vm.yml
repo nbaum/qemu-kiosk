@@ -1,0 +1,4 @@
+---
+Name: Damn Small Linux
+Description: A very small Linux distro.
+Args: [-cdrom, "http://distro.ibiblio.org/pub/linux/distributions/damnsmall/current/dsl-4.4.10.iso"]
